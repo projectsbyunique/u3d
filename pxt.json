@@ -1,0 +1,57 @@
+{
+    "name": "U3D - Boiler Lab Demo - v.0.4.0 (beta)",
+    "description": "An engine for 3D rendering, with heightmap, wall texturing, sprites, and mode 7 texture capabilities.",
+    "dependencies": {
+        "device": "*",
+        "Timers": "github:microsoft/arcade-timers#v1.1.0",
+        "tilemapToImage": "github:kiwiphoenix364/pxt-tilemap-image-converter#v1.0.0",
+        "arcade-tile-util": "github:microsoft/arcade-tile-util#v1.2.0",
+        "mouse": "*",
+        "browser-events": "*"
+    },
+    "files": [
+        "main.blocks",
+        "main.ts",
+        "README.md",
+        "assets.json",
+        "images.g.jres",
+        "images.g.ts",
+        "tilemap.g.jres",
+        "tilemap.g.ts",
+        "U3D.ts"
+    ],
+    "testFiles": [
+        "test.ts"
+    ],
+    "targetVersions": {
+        "branch": "v1.8.26",
+        "tag": "v1.8.26",
+        "commits": "https://github.com/microsoft/pxt-arcade/commits/6434cb63948fe7c1d1a7498115a4bc495495512c",
+        "target": "4.0.14",
+        "pxt": "7.4.27",
+        "targetId": "arcade"
+    },
+    "supportedTargets": [
+        "arcade"
+    ],
+    "preferredEditor": "tsprj",
+    "palette": [
+        "#000000",
+        "#f4f4f4",
+        "#b13e53",
+        "#a7f070",
+        "#ef7d57",
+        "#ffcd75",
+        "#257179",
+        "#38b764",
+        "#29366f",
+        "#3b5dc9",
+        "#41a6f6",
+        "#566c86",
+        "#333c57",
+        "#94b0c2",
+        "#5d275d",
+        "#1a1c2c"
+    ],
+    "assetPack": true
+}
