@@ -748,12 +748,12 @@ namespace U3D {
      * @param floor floor/lava texture for transparent cells
      * @param tilemap tilemap data for walls and wall textures
      */
-    //% blockId=u3d_setmaps block="U3D set maps: height %height color %color shader %shaderImg floor %floor tilemap %tilemap"
+    //% blockId=u3d_setmaps block="U3D set maps: height %height color %color floor %floor tilemap %tilemap || shader %shaderImg"
     //% height.shadow=screen_image_picker color.shadow=screen_image_picker
-    //% shaderImg.shadow=screen_image_picker floor.shadow=screen_image_picker
-    //% shaderImg.defl=0
+    //% floor.shadow=screen_image_picker shaderImg.shadow=screen_image_picker
+    //% expandableArgumentMode="toggle"
     //% group="Setup" weight=100
-    export function setMaps(height: Image, color: Image, shaderImg: Image, floor: Image, tilemap: tiles.TileMapData) {
+    export function setMaps(height: Image, color: Image, floor: Image, tilemap: tiles.TileMapData, shaderImg: Image = null) {
         heightMap = height
         colorMap = color
         shader = shaderImg ? shaderImg : DEFAULT_SHADER
