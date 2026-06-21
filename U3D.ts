@@ -10,6 +10,13 @@ namespace U3D {
     const WALL_HEIGHT = 8
     const FLOOR_TRANSPARENT_COLOR = 0
 
+    const DEFAULT_SHADER = img`
+. 1 2 3 4 5 6 7 8 9 a b c d e f
+. d e a e 4 8 6 c 6 9 c f b c f
+. b c c c e c 8 f 8 8 f f c f f
+. c f f f c f c f c f f f f f f
+`
+
     let cameraX = 16
     let cameraY = 6
     let cameraZ = 16
@@ -744,11 +751,12 @@ namespace U3D {
     //% blockId=u3d_setmaps block="U3D set maps: height %height color %color shader %shaderImg floor %floor tilemap %tilemap"
     //% height.shadow=screen_image_picker color.shadow=screen_image_picker
     //% shaderImg.shadow=screen_image_picker floor.shadow=screen_image_picker
+    //% shaderImg.defl=0
     //% group="Setup" weight=100
     export function setMaps(height: Image, color: Image, shaderImg: Image, floor: Image, tilemap: tiles.TileMapData) {
         heightMap = height
         colorMap = color
-        shader = shaderImg
+        shader = shaderImg ? shaderImg : DEFAULT_SHADER
         floorTex = floor
 
         tiles.setTilemap(tilemap)
@@ -843,7 +851,7 @@ namespace U3D {
     //% scale.defl=1 vx.defl=0 vz.defl=0 bobAmp.defl=0 bobSpeed.defl=0
     //% group="Billboards" weight=100
     export function addBillboard(spr: Sprite, worldX: number, worldZ: number, worldY: number, scale: number,
-        vx: number = 0, vz: number = 0, bobAmp: number = 0, bobSpeed: number = 0) {
+                                  vx: number = 0, vz: number = 0, bobAmp: number = 0, bobSpeed: number = 0) {
         spr.setFlag(SpriteFlag.Invisible, true)
         spr.x = worldX * 16
         spr.y = worldZ * 16
@@ -865,8 +873,7 @@ namespace U3D {
     //% expandableArgumentMode="toggle"
     //% group="Billboards" weight=90
     export function setFollows(spr: Sprite, on: boolean, speed: number = 0.07) {
-        for (let _bbi = 0; _bbi < billboards.length; _bbi++) {
-            const bb = billboards[_bbi]
+        for (let _bbi = 0; _bbi < billboards.length; _bbi++) { const bb = billboards[_bbi]
             if (bb.spr == spr) {
                 bb.follows = on ? 1 : 0
                 bb.followSpeed = speed
@@ -892,8 +899,7 @@ namespace U3D {
     //% on.defl=true
     //% group="Billboards" weight=80
     export function setBillboardFlag(spr: Sprite, flag: BillboardFlag, on: boolean) {
-        for (let _bbi = 0; _bbi < billboards.length; _bbi++) {
-            const bb = billboards[_bbi]
+        for (let _bbi = 0; _bbi < billboards.length; _bbi++) { const bb = billboards[_bbi]
             if (bb.spr == spr) {
                 if (on) bb.flags = bb.flags | flag
                 else bb.flags = bb.flags & ~flag
@@ -908,8 +914,7 @@ namespace U3D {
     //% blockId=u3d_getbillboardflag block="U3D %spr has flag %flag"
     //% group="Billboards" weight=70
     export function billboardHasFlag(spr: Sprite, flag: BillboardFlag): boolean {
-        for (let _bbi = 0; _bbi < billboards.length; _bbi++) {
-            const bb = billboards[_bbi]
+        for (let _bbi = 0; _bbi < billboards.length; _bbi++) { const bb = billboards[_bbi]
             if (bb.spr == spr) return (bb.flags & flag) != 0
         }
         return false
