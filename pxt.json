@@ -1,5 +1,5 @@
 {
-    "name": "U3D - Boiler Lab Demo - v.0.4.0 (beta)",
+    "name": "U3D",
     "description": "An engine for 3D rendering, with heightmap, wall texturing, sprites, and mode 7 texture capabilities.",
     "dependencies": {
         "device": "*",
@@ -34,24 +34,5 @@
     "supportedTargets": [
         "arcade"
     ],
-    "preferredEditor": "tsprj",
-    "palette": [
-        "#000000",
-        "#f4f4f4",
-        "#b13e53",
-        "#a7f070",
-        "#ef7d57",
-        "#ffcd75",
-        "#257179",
-        "#38b764",
-        "#29366f",
-        "#3b5dc9",
-        "#41a6f6",
-        "#566c86",
-        "#333c57",
-        "#94b0c2",
-        "#5d275d",
-        "#1a1c2c"
-    ],
-    "assetPack": true
+    "preferredEditor": "tsprj"
 }
