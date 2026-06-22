@@ -3,7 +3,7 @@
 
 > Open this page at [https://projectsbyunique.github.io/u3d/](https://projectsbyunique.github.io/u3d/)
 
-## Use as Extension
+## Use as Extensionn
 
 This repository can be added as an **extension** in MakeCode.
 
