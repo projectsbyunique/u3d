@@ -1065,7 +1065,12 @@ namespace U3D {
     //% blockId=u3d_gettileheight block="U3D tile height at x %worldX z %worldZ"
     //% group="World" weight=80
     export function getTileHeight(worldX: number, worldZ: number): number {
-        return terrain_height(worldX, worldZ)
+        const x = worldX | 0
+        const z = worldZ | 0
+        if (x < 0 || x >= mapWidth || z < 0 || z >= mapHeight) return 0
+        const idx = z * mapWidth + x
+        const ov = flatHeightOverride[idx]
+        return ov >= 0 ? ov : flatHeightMap[idx]
     }
 
     /**
