@@ -54,6 +54,7 @@ namespace U3D {
 
     const flatHeightOverride: number[] = []
     const flatColorMap: number[] = []
+    const flatColorMapOriginal: number[] = []
     const flatTileMap: number[] = []
     const flatIsCollisionWall: boolean[] = []
     const flatIsGrounded: boolean[] = []
@@ -190,6 +191,7 @@ namespace U3D {
                 flatHeightMap[idx] = heightMap.getPixel(x, z)
                 flatHeightOverride[idx] = -1
                 flatColorMap[idx] = colorMap.getPixel(x, z)
+                flatColorMapOriginal[idx] = flatColorMap[idx]
                 if (tmData) {
                     flatTileMap[idx] = tmData.getTile(x, z)
                     flatIsCollisionWall[idx] = tmData.isWall(x, z)
@@ -1101,4 +1103,30 @@ namespace U3D {
     //% blockId=u3d_getcameraangle block="U3D camera angle"
     //% group="Camera" weight=40
     export function getCameraAngle(): number { return cameraAngleDegrees }
+
+    //% blockId=u3d_gettilecolor block="U3D tile color at x %worldX z %worldZ"
+    //% group="World" weight=55
+    export function getTileColor(worldX: number, worldZ: number): number {
+        const x = worldX | 0
+        const z = worldZ | 0
+        if (x < 0 || x >= mapWidth || z < 0 || z >= mapHeight) return 0
+        return flatColorMap[z * mapWidth + x]
+    }
+
+    //% blockId=u3d_resettilecolor block="U3D reset tile color at x %worldX z %worldZ"
+    //% group="World" weight=50
+    export function resetTileColor(worldX: number, worldZ: number) {
+        const x = worldX | 0
+        const z = worldZ | 0
+        if (x < 0 || x >= mapWidth || z < 0 || z >= mapHeight) return
+        const idx = z * mapWidth + x
+        flatColorMap[idx] = flatColorMapOriginal[idx]
+    }
+
+    //% blockId=u3d_resetallcolors block="U3D reset all tile colors"
+    //% group="World" weight=45
+    export function resetAllTileColors() {
+        const total = mapWidth * mapHeight
+        for (let i = 0; i < total; i++) flatColorMap[i] = flatColorMapOriginal[i]
+    }
 }
