@@ -28,6 +28,7 @@ namespace U3D {
     let floorTexturingEnabled = true
     let viewStepOffset = 0
     let heightCollisionThreshold = 999
+    let stepHeightLimit = 3   // max heightmap units player can step up per tile
 
     let mapWidth = 64
     let mapHeight = 64
@@ -230,6 +231,8 @@ namespace U3D {
         let cz = (wz | 0) % mapHeight; if (cz < 0) cz += mapHeight
         const idx = cz * mapWidth + cx
         const ov = flatHeightOverride[idx]
+        // Always compare in heightmap units (before vScale), consistent
+        // whether the value comes from the override or the heightmap.
         const h = ov >= 0 ? ov : flatHeightMap[idx]
         return h > heightCollisionThreshold
     }
@@ -256,7 +259,7 @@ namespace U3D {
         const newX = (moveX != 0 && !blockedX) ? cameraX + moveX : cameraX
         const newZ = (moveZ != 0 && !blockedZ) ? cameraZ + moveZ : cameraZ
         const newGround = terrain_height(newX, newZ)
-        if (newGround - currentGround <= 3) {
+        if (newGround - currentGround <= stepHeightLimit * verticalScale) {
             if (newGround > currentGround) {
                 viewStepOffset -= (newGround - currentGround) * verticalScale
             } else if (newGround < currentGround) {
@@ -1072,10 +1075,10 @@ namespace U3D {
      * tilemap wall — so doors, raised platforms, and setTileHeight walls
      * become real obstacles.
      *
-     * Reference heights:
+     * Reference heights (heightmap units, same as setTileHeight):
      *   0 = floor level
      *   2 = low barrier (player can't pass, can see over)
-     *   8 = full wall height
+     *   8 = full wall height (matches WALL_HEIGHT)
      *
      * Set to 999 (default) to disable height collision entirely and rely
      * only on the tilemap wall flags.
@@ -1133,5 +1136,12 @@ namespace U3D {
     //% group="Camera" weight=35
     export function setCameraMovement(on: boolean) {
         cameraMovementEnabled = on
+    }
+
+    //% blockId=u3d_setstepheight block="U3D set step height limit %height"
+    //% height.defl=1
+    //% group="Settings" weight=70
+    export function setStepHeight(height: number) {
+        stepHeightLimit = height
     }
 }
