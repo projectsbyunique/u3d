@@ -1088,4 +1088,17 @@ namespace U3D {
     export function setHeightCollision(threshold: number) {
         heightCollisionThreshold = threshold
     }
+
+    //% blockId=u3d_settilecolor block="U3D set tile color at x %worldX z %worldZ to %color"
+    //% group="World" weight=60
+    export function setTileColor(worldX: number, worldZ: number, color: number) {
+        const x = worldX | 0
+        const z = worldZ | 0
+        if (x < 0 || x >= mapWidth || z < 0 || z >= mapHeight) return
+        flatColorMap[z * mapWidth + x] = color
+    }
+
+    //% blockId=u3d_getcameraangle block="U3D camera angle"
+    //% group="Camera" weight=40
+    export function getCameraAngle(): number { return cameraAngleDegrees }
 }
