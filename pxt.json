@@ -2,12 +2,7 @@
     "name": "U3D",
     "description": "An engine for 3D rendering, with heightmap, wall texturing, sprites, and mode 7 texture capabilities.",
     "dependencies": {
-        "device": "*",
-        "Timers": "github:microsoft/arcade-timers#v1.1.0",
-        "tilemapToImage": "github:kiwiphoenix364/pxt-tilemap-image-converter#v1.0.0",
-        "arcade-tile-util": "github:microsoft/arcade-tile-util#v1.2.0",
-        "mouse": "*",
-        "browser-events": "*"
+        "device": "*"
     },
     "files": [
         "main.blocks",
