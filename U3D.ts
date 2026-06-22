@@ -4,7 +4,7 @@ namespace U3D {
     const SKY = 12
     const SHADE_ROW = 1
     const SHADE_FALLBACK = 15
-    const FOV = 0.88
+    let FOV = 0.88
     const VPROJ = 25
     const MAX_STEPS = 64
     const WALL_HEIGHT = 8
@@ -1148,5 +1148,12 @@ namespace U3D {
     //% group="Settings" weight=70
     export function setStepHeight(height: number) {
         stepHeightLimit = height
+    }
+
+    //% blockId=u3d_setfov block="U3D set FOV %fov"
+    //% fov.defl=0.88
+    //% group="Settings" weight=75
+    export function setFOV(fov: number) {
+        FOV = fov
     }
 }
