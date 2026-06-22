@@ -274,8 +274,6 @@ namespace U3D {
         if (cameraZ < 0) cameraZ += mapHeight
         if (cameraZ >= mapHeight) cameraZ -= mapHeight
 
-        if (controller.A.isPressed()) cameraY += 0.1
-        if (controller.B.isPressed()) cameraY -= 0.1
         if (cameraY < 1) cameraY = 1
 
         isMoving = controller.dy() != 0
@@ -823,7 +821,7 @@ namespace U3D {
 
             update_billboards()
             const hasDpad = controller.dx() != 0 || controller.dy() != 0
-            const hasButton = controller.A.isPressed() || controller.B.isPressed()
+            const hasButton = false
             if (hasDpad || hasButton) {
                 check_controls()
                 mode_7()
@@ -1128,5 +1126,12 @@ namespace U3D {
     export function resetAllTileColors() {
         const total = mapWidth * mapHeight
         for (let i = 0; i < total; i++) flatColorMap[i] = flatColorMapOriginal[i]
+    }
+
+    //% blockId=u3d_setmovement block="U3D set camera movement %on"
+    //% on.defl=true
+    //% group="Camera" weight=35
+    export function setCameraMovement(on: boolean) {
+        cameraMovementEnabled = on
     }
 }
