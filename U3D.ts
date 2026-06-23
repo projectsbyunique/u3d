@@ -1,12 +1,12 @@
 //% color="#7C3AED" weight=100 icon="\uf1b2" block="U3D"
 namespace U3D {
 
-    const SKY = 12
+    let SKY = 12
     const SHADE_ROW = 1
     const SHADE_FALLBACK = 15
     let FOV = 0.88
     const VPROJ = 25
-    const MAX_STEPS = 64
+    let MAX_STEPS = 64
     const WALL_HEIGHT = 8
     const FLOOR_TRANSPARENT_COLOR = 0
 
@@ -24,11 +24,14 @@ namespace U3D {
     let verticalScale = 1.5
     let texturing = true
     let cameraMovementEnabled = true
+    let enginePaused = false
+    let engineRunning = false
     let bakedLightingEnabled = true
     let floorTexturingEnabled = true
     let viewStepOffset = 0
     let heightCollisionThreshold = 999
-    let stepHeightLimit = 3   // max heightmap units player can step up per tile
+    let stepHeightLimit = 3
+    let moveSpeed = 0.06   // max heightmap units player can step up per tile
 
     let mapWidth = 64
     let mapHeight = 64
@@ -61,6 +64,7 @@ namespace U3D {
     const flatIsGrounded: boolean[] = []
     const flatTextures: number[][] = []
     const floorTextureFlat: number[] = []
+
 
     let columnBuf: Buffer = null
     const shadeLUT: number[] = []
@@ -231,8 +235,6 @@ namespace U3D {
         let cz = (wz | 0) % mapHeight; if (cz < 0) cz += mapHeight
         const idx = cz * mapWidth + cx
         const ov = flatHeightOverride[idx]
-        // Always compare in heightmap units (before vScale), consistent
-        // whether the value comes from the override or the heightmap.
         const h = ov >= 0 ? ov : flatHeightMap[idx]
         return h > heightCollisionThreshold
     }
@@ -247,8 +249,8 @@ namespace U3D {
         cameraCos = cosLUT[lutIndex]
         cameraSin = sinLUT[lutIndex]
 
-        const moveX = controller.dy() * cameraSin * 0.06
-        const moveZ = controller.dy() * cameraCos * 0.06
+        const moveX = controller.dy() * cameraSin * moveSpeed
+        const moveZ = controller.dy() * cameraCos * moveSpeed
         const r = 0.2
         const padX = moveX > 0 ? r : -r
         const padZ = moveZ > 0 ? r : -r
@@ -366,25 +368,22 @@ namespace U3D {
 
                 const isHole = rawC == FLOOR_TRANSPARENT_COLOR
                 const invNextPerpEarly = 1 / nextPerp
-                if (isHole && !flatTileMap[mapIdx]) {
+                if (isHole && !flatTileMap[mapIdx] && !blockColumns[mapIdx]) {
                     if (hasFloorTex && watermark > 0) {
                         let hFar = (centerY + camYVP * invNextPerpEarly) | 0
                         if (hFar < 0) hFar = 0
                         if (hFar >= screenH) hFar = screenH - 1
                         if (hFar < watermark) {
-
                             let shadeBoundary = centerY + floorShadeStart
                             if (shadeBoundary < hFar) shadeBoundary = hFar
                             if (shadeBoundary > watermark) shadeBoundary = watermark
                             const unshadeEnd = shadeBoundary
-
                             for (let y = hFar; y < unshadeEnd; y++) {
                                 const fd = floorDistLUT[y - centerY]
                                 const fTexX = (((camX + rayX * fd) * 16) | 0) & 15
                                 const fTexY = (((camZ + rayZ * fd) * 16) | 0) & 15
                                 col[y] = shadeLUT[floorTextureFlat[(fTexY << 4) | fTexX]]
                             }
-
                             for (let y = unshadeEnd; y < watermark; y++) {
                                 const fd = floorDistLUT[y - centerY]
                                 const fTexX = (((camX + rayX * fd) * 16) | 0) & 15
@@ -398,66 +397,168 @@ namespace U3D {
                     continue
                 }
 
-                const tileIdx = flatTileMap[mapIdx]
-                let h = rawH
-                const hasTile = tileIdx != 0
-                if (hasTile && flatIsGrounded[tileIdx]) h += WALL_HEIGHT
-
-                const ht = (camY - h * vScale) * VPROJ
-
                 const invUseDist = 1 / useDist
+                const sideShadeX = side == 1 && (x & 1) === 0
+                const useShadeGlobal = bakedLightingEnabled && useDist > 12
+                const useShadeDither = bakedLightingEnabled && useDist > 6 && !useShadeGlobal && (x & 1) === 0
 
-                let top = (centerY + ht * invUseDist) | 0
-                let topFar = (centerY + ht * invNextPerpEarly) | 0
-                if (top < 0) top = 0
-                if (topFar < 0) topFar = 0
-                if (topFar > top) topFar = top
+                // Compute wallX once for texture X coordinate
+                let wallX = side == 0 ? camZ + useDist * rayZ : camX + useDist * rayX
+                const wallFloor = wallX < 0 ? (wallX | 0) - 1 : (wallX | 0)
+                wallX -= wallFloor
+                let texX = (wallX * 16) | 0
+                if (texX >= 16) texX = 15
 
-                const c = rawC
-                const topColor = bakedLightingEnabled ? shadeLUT[c] : c
-                let faceColor = c
-                if (side == 1 && bakedLightingEnabled) faceColor = (x & 1) ? shadeLUT[c] : c
+                const col_data = blockColumns[mapIdx]
 
-                if (top < watermark) {
-                    if (texturing && !firstBand && hasTile && flatTextures[tileIdx] && flatTextures[tileIdx].length > 0) {
-                        let wallX = side == 0 ? camZ + useDist * rayZ : camX + useDist * rayX
+                if (col_data) {
+                    // ── Block column path: multiple stacked blocks ──────────
+                    const numBlocks = (col_data.length / 3) | 0
+                    const topBlockBase = (numBlocks - 1) * 3
+                    const topBlockH = col_data[topBlockBase]
 
-                        const wallFloor = wallX < 0 ? (wallX | 0) - 1 : (wallX | 0)
-                        wallX -= wallFloor
-                        let texX = (wallX * 16) | 0
-                        if (texX >= 16) texX = 15
+                    // Compute column top screen Y — skip if fully below watermark
+                    const htColumnTop = (camY - topBlockH * vScale) * VPROJ
+                    let columnTop = (centerY + htColumnTop * invUseDist) | 0
+                    if (columnTop < 0) columnTop = 0
 
-                        const topU = centerY + ht * invUseDist
-                        const baseU = centerY + camYVP * invUseDist
-                        const fullSpan = baseU - topU
-                        if (fullSpan > 0) {
-                            const stepPerRow = (16 << 8) / fullSpan
-                            let accum = ((top - topU) * stepPerRow) | 0
-                            if (accum < 0) accum = 0
-                            const cachedTex = flatTextures[tileIdx]
-                            const shadeFull = bakedLightingEnabled && useDist > 12
-                            const shadeDither = bakedLightingEnabled && useDist > 6 && dist <= 12
-                            const useShade = shadeFull || (shadeDither && (x & 1) === 0)
-                            for (let y = top; y < watermark; y++) {
-                                let texY = accum >> 8
-                                if (texY >= 16) texY = 15
-                                let px = cachedTex[(texY << 4) | texX]
-                                if (px) {
-                                    if (useShade) px = shadeLUT[px]
-                                    if (side == 1 && (x & 1) === 0) px = shadeLUT[px]
-                                    col[y] = px
-                                }
-                                accum += stepPerRow
+                    if (columnTop < watermark) {
+                        let blockFirstBand = firstBand
+
+                        for (let bi = numBlocks - 1; bi >= 0; bi--) {
+                            if (watermark <= 0) break
+                            const bBase = bi * 3
+                            const bTopH = col_data[bBase]
+                            const bColor = col_data[bBase + 1]
+                            const bTexIdx = col_data[bBase + 2]
+                            const bBotH = bi > 0 ? col_data[(bi - 1) * 3] : 0
+
+                            const htTop = (camY - bTopH * vScale) * VPROJ
+                            let bTop = (centerY + htTop * invUseDist) | 0
+                            if (bTop < 0) bTop = 0
+                            if (bTop >= watermark) continue
+
+                            // Bottom of this block: project the block below's top,
+                            // or use watermark for the bottom block (matches single
+                            // block path — fills naturally to the floor with no gap).
+                            let bBot: number
+                            if (bi == 0) {
+                                bBot = watermark
+                            } else {
+                                const htBot = (camY - bBotH * vScale) * VPROJ
+                                bBot = (centerY + htBot * invUseDist) | 0
+                                if (bBot > watermark) bBot = watermark
+                                if (bBot < bTop) bBot = bTop
                             }
+                            if (bTop >= bBot) continue
+
+                            const bc = bakedLightingEnabled ? shadeLUT[bColor] : bColor
+                            let faceCol = bColor
+                            if (side == 1 && bakedLightingEnabled) faceCol = (x & 1) ? shadeLUT[bColor] : bColor
+
+                            if (texturing && bTexIdx >= 0 && flatTextures[bTexIdx] && flatTextures[bTexIdx].length > 0) {
+                                const cachedTex = flatTextures[bTexIdx]
+                                const blockSpan = bBot - bTop
+                                if (blockSpan > 0) {
+                                    let stepPerRow = 0
+                                    if (textureTiling) {
+                                        const worldH = (bTopH - bBotH) * vScale
+                                        const screenH1 = worldH * VPROJ * invUseDist
+                                        stepPerRow = screenH1 > 0 ? ((16 << 8) / screenH1) | 0 : (16 << 8)
+                                    } else {
+                                        stepPerRow = ((16 << 8) / blockSpan) | 0
+                                    }
+                                    let accum = 0
+                                    for (let y = bTop; y < bBot; y++) {
+                                        let texY = textureTiling ? (accum >> 8) & 15 : Math.min(accum >> 8, 15)
+                                        let px = cachedTex[(texY << 4) | texX]
+                                        if (px) {
+                                            if (useShadeGlobal || useShadeDither) px = shadeLUT[px]
+                                            if (sideShadeX) px = shadeLUT[px]
+                                            col[y] = px
+                                        }
+                                        accum += stepPerRow
+                                    }
+                                }
+                            } else {
+                                col.fill(blockFirstBand ? bc : faceCol, bTop, bBot - bTop)
+                            }
+                            watermark = bTop
+                            blockFirstBand = false
                         }
-                    } else {
-                        col.fill(firstBand ? topColor : faceColor, top, watermark - top)
+
+                        // Top cap — flat top face using top block color
+                        let topFar = (centerY + htColumnTop * invNextPerpEarly) | 0
+                        if (topFar < 0) topFar = 0
+                        if (topFar < watermark) {
+                            const topBlockColor = col_data[topBlockBase + 1]
+                            const capC = bakedLightingEnabled ? shadeLUT[topBlockColor] : topBlockColor
+                            col.fill(capC, topFar, watermark - topFar)
+                            watermark = topFar
+                        }
+                        firstBand = false
                     }
-                    watermark = top
-                }
-                if (topFar < watermark) {
-                    col.fill(topColor, topFar, watermark - topFar)
-                    watermark = topFar
+
+                    if (watermark <= 0) { lastDist = dist; break }
+                    lastDist = dist
+
+                } else {
+                    // ── Single block path (original fast path) ──────────────
+                    const tileIdx = flatTileMap[mapIdx]
+                    let h = rawH
+                    const hasTile = tileIdx != 0
+                    if (hasTile && flatIsGrounded[tileIdx]) h += WALL_HEIGHT
+
+                    const ht = (camY - h * vScale) * VPROJ
+
+                    let top = (centerY + ht * invUseDist) | 0
+                    let topFar = (centerY + ht * invNextPerpEarly) | 0
+                    if (top < 0) top = 0
+                    if (topFar < 0) topFar = 0
+                    if (topFar > top) topFar = top
+
+                    const c = rawC
+                    const topColor = bakedLightingEnabled ? shadeLUT[c] : c
+                    let faceColor = c
+                    if (side == 1 && bakedLightingEnabled) faceColor = (x & 1) ? shadeLUT[c] : c
+
+                    if (top < watermark) {
+                        if (texturing && !firstBand && hasTile && flatTextures[tileIdx] && flatTextures[tileIdx].length > 0) {
+                            const topU = centerY + ht * invUseDist
+                            const baseU = centerY + camYVP * invUseDist
+                            const fullSpan = baseU - topU
+                            if (fullSpan > 0) {
+                                let stepPerRow = 0
+                                let accum = 0
+                                if (textureTiling) {
+                                    stepPerRow = ((16 << 8) / (WALL_HEIGHT * vScale * VPROJ * invUseDist)) | 0
+                                    accum = 0
+                                } else {
+                                    stepPerRow = ((16 << 8) / fullSpan) | 0
+                                    accum = ((top - topU) * stepPerRow) | 0
+                                    if (accum < 0) accum = 0
+                                }
+                                const cachedTex = flatTextures[tileIdx]
+                                for (let y = top; y < watermark; y++) {
+                                    let texY = textureTiling ? (accum >> 8) & 15 : Math.min(accum >> 8, 15)
+                                    let px = cachedTex[(texY << 4) | texX]
+                                    if (px) {
+                                        if (useShadeGlobal || useShadeDither) px = shadeLUT[px]
+                                        if (sideShadeX) px = shadeLUT[px]
+                                        col[y] = px
+                                    }
+                                    accum += stepPerRow
+                                }
+                            }
+                        } else {
+                            col.fill(firstBand ? topColor : faceColor, top, watermark - top)
+                        }
+                        watermark = top
+                    }
+                    if (topFar < watermark) {
+                        col.fill(topColor, topFar, watermark - topFar)
+                        watermark = topFar
+                    }
                 }
                 firstBand = false
                 if (watermark <= 0) { lastDist = dist; break }
@@ -805,6 +906,7 @@ namespace U3D {
         cameraSin = sinLUT[initialLutIndex]
 
         let frameCount = 0
+        engineRunning = true
         game.onUpdate(function () {
             frameCount++
 
@@ -822,10 +924,10 @@ namespace U3D {
                 return
             }
 
+            if (!engineRunning || enginePaused) return
             update_billboards()
             const hasDpad = controller.dx() != 0 || controller.dy() != 0
-            const hasButton = false
-            if (hasDpad || hasButton) {
+            if (hasDpad) {
                 check_controls()
                 mode_7()
             } else if (frameCount % 2 == 0) {
@@ -1155,5 +1257,207 @@ namespace U3D {
     //% group="Settings" weight=75
     export function setFOV(fov: number) {
         FOV = fov
+    }
+
+    //% blockId=u3d_setspeed block="U3D set move speed %speed"
+    //% speed.defl=0.06
+    //% group="Settings" weight=72
+    export function setMoveSpeed(speed: number) {
+        moveSpeed = speed
+    }
+
+    //% blockId=u3d_getspeed block="U3D move speed"
+    //% group="Settings" weight=71
+    export function getMoveSpeed(): number {
+        return moveSpeed
+    }
+
+    //% blockId=u3d_renderdistance
+    export enum RenderDistance {
+        //% block="low"
+        Low = 0,
+        //% block="normal"
+        Normal = 1,
+        //% block="high"
+        High = 2,
+        //% block="extreme"
+        Extreme = 3
+    }
+
+    /**
+     * Set how far the camera can see. Higher values look better but cost
+     * more CPU — lower values run faster. Tune this to your map size.
+     *
+     *   Low     — small rooms, tight corridors, max performance
+     *   Normal  — default, good for most maps up to 64×64
+     *   High    — large open areas, maps up to 128×128
+     *   Extreme — huge maps or very long sightlines, slowest
+     */
+    //% blockId=u3d_setrenderdistance block="U3D set render distance %distance"
+    //% distance.defl=RenderDistance.Normal
+    //% group="Settings" weight=76
+    export function setRenderDistance(distance: RenderDistance) {
+        if (distance == RenderDistance.Low) MAX_STEPS = 16
+        else if (distance == RenderDistance.Normal) MAX_STEPS = 32
+        else if (distance == RenderDistance.High) MAX_STEPS = 64
+        else MAX_STEPS = 128
+    }
+
+    /**
+     * Set the sky color (the color above the horizon).
+     * Uses MakeCode palette color index 0-15.
+     * Default is 12 (dark blue).
+     */
+    //% blockId=u3d_setskycolor block="U3D set sky color %color"
+    //% color.defl=12 color.shadow=colorindexpicker
+    //% group="Settings" weight=78
+    export function setSkyColor(color: number) {
+        SKY = color
+    }
+
+    /**
+     * Pause the engine. The screen freezes — no rendering, no movement,
+     * no billboard updates. Call resumeEngine() to continue.
+     * Useful for menus, cutscenes, dialogue, or any moment where the
+     * game world should stop without clearing the screen.
+     */
+    //% blockId=u3d_pauseengine block="U3D pause engine"
+    //% group="Settings" weight=65
+    export function pauseEngine() {
+        enginePaused = true
+        cameraMovementEnabled = false
+    }
+
+    /**
+     * Resume the engine after a pause.
+     */
+    //% blockId=u3d_resumeengine block="U3D resume engine"
+    //% group="Settings" weight=64
+    export function resumeEngine() {
+        enginePaused = false
+        cameraMovementEnabled = true
+    }
+
+    /**
+     * Stop the engine completely and clear the screen.
+     * Use this for game over screens, scene transitions, or
+     * any moment where you want to return full control to your code.
+     * Call start() again to restart from scratch.
+     */
+    //% blockId=u3d_stopengine block="U3D stop engine"
+    //% group="Settings" weight=63
+    export function stopEngine() {
+        engineRunning = false
+        enginePaused = false
+        cameraMovementEnabled = false
+        if (bgImage) bgImage.fill(0)
+    }
+
+    /**
+     * Stack blocks on a tile. Each block has a top height (in heightmap units),
+     * a color, and an optional texture tile index (-1 for color only).
+     * Blocks are ordered bottom to top.
+     *
+     * Example — dirt on stone:
+     *   U3D.setBlockColumn(5, 5, [4, 6, -1, 8, 7, -1])
+     *   means: block 1 goes from 0 to height 4 in color 6,
+     *          block 2 goes from 4 to height 8 in color 7.
+     *
+     * @param worldX X tile
+     * @param worldZ Z tile
+     * @param blocks flat array [topH, color, texIdx, topH, color, texIdx, ...]
+     */
+    //% blockId=u3d_setblockcolumn block="U3D set block column at x %worldX z %worldZ to %blocks"
+    //% group="World" weight=42
+    export function setBlockColumn(worldX: number, worldZ: number, blocks: number[]) {
+        const x = worldX | 0
+        const z = worldZ | 0
+        if (x < 0 || x >= mapWidth || z < 0 || z >= mapHeight) return
+        blockColumns[z * mapWidth + x] = blocks
+    }
+
+    /**
+     * Stack a single block on top of whatever is already at this tile.
+     * If no column exists yet, creates one starting from the base heightmap height.
+     * @param worldX X tile
+     * @param worldZ Z tile
+     * @param topHeight top of this block in heightmap units
+     * @param color color index 0-15
+     * @param texIdx tileset index for texture, or -1 for solid color
+     */
+    //% blockId=u3d_stackblock block="U3D stack block at x %worldX z %worldZ top %topHeight color %color tex %texIdx"
+    //% texIdx.defl=-1
+    //% group="World" weight=41
+    export function stackBlock(worldX: number, worldZ: number, topHeight: number, color: number, texIdx: number = -1) {
+        const x = worldX | 0
+        const z = worldZ | 0
+        if (x < 0 || x >= mapWidth || z < 0 || z >= mapHeight) return
+        const idx = z * mapWidth + x
+        if (!blockColumns[idx]) {
+            const baseH = flatHeightMap[idx]
+            blockColumns[idx] = [baseH, flatColorMap[idx], -1]
+        }
+        blockColumns[idx].push(topHeight)
+        blockColumns[idx].push(color)
+        blockColumns[idx].push(texIdx)
+    }
+
+    /**
+     * Remove all stacked blocks from a tile, reverting to the single-block fast path.
+     */
+    //% blockId=u3d_clearblockcolumn block="U3D clear block column at x %worldX z %worldZ"
+    //% group="World" weight=40
+    export function clearBlockColumn(worldX: number, worldZ: number) {
+        const x = worldX | 0
+        const z = worldZ | 0
+        if (x < 0 || x >= mapWidth || z < 0 || z >= mapHeight) return
+        blockColumns[z * mapWidth + x] = null
+    }
+
+    /**
+     * Remove all block columns across the entire map.
+     */
+    //% blockId=u3d_clearallcolumns block="U3D clear all block columns"
+    //% group="World" weight=39
+    export function clearAllBlockColumns() {
+        const total = mapWidth * mapHeight
+        for (let i = 0; i < total; i++) blockColumns[i] = null
+    }
+
+    /**
+     * Toggle texture tiling mode.
+     * Off (default): texture stretches to fill the entire wall face.
+     * On: texture tiles at a fixed world scale — one tile per WALL_HEIGHT units.
+     *     Stacked blocks each show the full texture regardless of their thickness.
+     */
+    //% blockId=u3d_settexturetiling block="U3D set texture tiling %on"
+    //% on.defl=false
+    //% group="Settings" weight=69
+    export function setTextureTiling(on: boolean) {
+        textureTiling = on
+    }
+
+    /**
+     * Returns the world height (in heightmap units) that makes a wall face
+     * appear as a perfect square when viewed straight-on. Use this as your
+     * standard block height for Minecraft-style stacking so textures look 1:1.
+     */
+    //% blockId=u3d_getblockheight block="U3D block height for 1:1 texture"
+    //% group="World" weight=38
+    export function getBlockHeight(): number {
+        return WALL_HEIGHT
+    }
+
+    /**
+     * Get the raw block column data for a tile, or null if none exists.
+     * Returns a reference to the internal array — handle with care.
+     */
+    //% blockId=u3d_getblockcolumn block="U3D get block column at x %worldX z %worldZ"
+    //% group="World" weight=37
+    export function getBlockColumn(worldX: number, worldZ: number): number[] {
+        const x = worldX | 0
+        const z = worldZ | 0
+        if (x < 0 || x >= mapWidth || z < 0 || z >= mapHeight) return null
+        return blockColumns[z * mapWidth + x]
     }
 }
