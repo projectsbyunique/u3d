@@ -35,6 +35,31 @@ namespace U3D {
     let moveSpeed = 0.06   // max heightmap units player can step up per tile
     let turnSpeed = 0.8     // degrees per d-pad tick
 
+    // ── Spatial Audio (UTM integration) ─────────────────────────────────────
+    interface SongData {
+        stepMs: number
+        sfxWave: WaveShape[]
+        sfxStartFreq: number[]
+        sfxEndFreq: number[]
+        sfxStartVol: number[]
+        sfxEndVol: number[]
+        sfxDuration: number[]
+        sfxEffect: SoundExpressionEffect[]
+        sfxCurve: InterpolationCurve[]
+        data: Buffer
+    }
+    interface SoundSource {
+        songData: SongData
+        x: number
+        z: number
+        maxDist: number
+        loop: boolean
+        active: boolean
+        dataIndex: number
+        stepTimer: number
+    }
+    const soundSources: SoundSource[] = []
+
     let mapWidth = 64
     let mapHeight = 64
     let mapXMask = 63
@@ -968,6 +993,7 @@ namespace U3D {
 
             if (!engineRunning || enginePaused) return
             update_billboards()
+            update_spatial_audio()
             const hasDpad = controller.dx() != 0 || controller.dy() != 0
             if (hasDpad) {
                 check_controls()
@@ -1667,4 +1693,106 @@ namespace U3D {
             }
         }
     }
+
+    /**
+     * Add a UTM sound source at a world position.
+     * The sound plays automatically each frame, with volume scaling
+     * based on distance from the camera. Fully integrated with the
+     * U3D game loop — no timer or manual update call needed.
+     *
+     * Build a SongData object from your UTM export and pass it here.
+     * Example:
+     *   U3D.addSoundSource({
+     *     stepMs: 200,
+     *     sfxWave: [WaveShape.Sine],
+     *     sfxStartFreq: [440], sfxEndFreq: [440],
+     *     sfxStartVol: [255], sfxEndVol: [0],
+     *     sfxDuration: [200],
+     *     sfxEffect: [SoundExpressionEffect.None],
+     *     sfxCurve: [InterpolationCurve.Linear],
+     *     data: hex`01 00`
+     *   }, 5, 8, 10, true)
+     *
+     * @param songData UTM SongData object (from your UTM export)
+     * @param worldX   X tile position of the sound source
+     * @param worldZ   Z tile position of the sound source
+     * @param maxDist  how many tiles away the sound can be heard
+     * @param loop     whether to loop the song (default true)
+     */
+    //% blockId=u3d_addsoundsource block="U3D play UTM song at x %worldX z %worldZ max distance %maxDist loop %loop"
+    //% maxDist.defl=8 loop.defl=true
+    //% group="Audio" weight=100
+    export function playSongAt(songData: SongData, worldX: number, worldZ: number, maxDist: number, loop: boolean = true) {
+        soundSources.push({
+            songData, x: worldX, z: worldZ,
+            maxDist, loop, active: true,
+            dataIndex: 0, stepTimer: 0
+        })
+    }
+
+    /**
+     * Remove all sound sources at a tile position.
+     */
+    //% blockId=u3d_removesoundsource block="U3D remove sound source at x %worldX z %worldZ"
+    //% group="Audio" weight=95
+    export function removeSoundSource(worldX: number, worldZ: number) {
+        for (let i = soundSources.length - 1; i >= 0; i--) {
+            if (soundSources[i].x === worldX && soundSources[i].z === worldZ) {
+                soundSources.splice(i, 1)
+            }
+        }
+    }
+
+    /**
+     * Move a sound source from one tile to another.
+     * Use this for moving enemies or objects that emit sound.
+     */
+    //% blockId=u3d_movesoundsource block="U3D move sound source from x %oldX z %oldZ to x %newX z %newZ"
+    //% group="Audio" weight=90
+    export function moveSoundSource(oldX: number, oldZ: number, newX: number, newZ: number) {
+        for (let i = 0; i < soundSources.length; i++) {
+            if (soundSources[i].x === oldX && soundSources[i].z === oldZ) {
+                soundSources[i].x = newX
+                soundSources[i].z = newZ
+            }
+        }
+    }
+
+    /**
+     * Remove all active sound sources.
+     */
+    //% blockId=u3d_clearallsoundsources block="U3D clear all sound sources"
+    //% group="Audio" weight=85
+    export function clearAllSoundSources() {
+        soundSources.splice(0, soundSources.length)
+    }
+
+    /**
+     * Play a single MakeCode sound effect at a world position with distance-based
+     * volume falloff. No SongData or UTM required — just pass any sound effect.
+     * Volume scales from full at the source tile to silent at maxDist tiles away.
+     * If the camera is beyond maxDist, nothing plays.
+     *
+     * @param sound    any MakeCode sound effect (music.createSoundEffect, music.melodyPlayable, etc.)
+     * @param worldX   X tile position of the sound
+     * @param worldZ   Z tile position of the sound
+     * @param maxDist  audible radius in tiles
+     */
+    //% blockId=u3d_playsoundat block="U3D play sound %sound at x %worldX z %worldZ max distance %maxDist"
+    //% maxDist.defl=8
+    //% sound.shadow=music_create_sound_effect
+    //% group="Audio" weight=99
+    export function playSoundAt(sound: music.Playable, worldX: number, worldZ: number, maxDist: number) {
+        const dx = worldX - cameraX
+        const dz = worldZ - cameraZ
+        const dist = Math.sqrt(dx * dx + dz * dz)
+        if (dist >= maxDist) return
+        const volMult = 1 - dist / maxDist
+        const prevVol = music.volume()
+        music.setVolume(Math.round(prevVol * volMult))
+        music.play(sound, music.PlaybackMode.InBackground)
+        music.setVolume(prevVol)
+    }
+
+
 }
