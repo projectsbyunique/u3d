@@ -91,6 +91,8 @@ namespace U3D {
     const flatIsGrounded: boolean[] = []
     const flatTextures: number[][] = []
     const floorTextureFlat: number[] = []
+    const blockColumns: number[][] = []
+    let textureTiling = false
 
 
     let columnBuf: Buffer = null
@@ -229,6 +231,7 @@ namespace U3D {
                 flatHeightOverride[idx] = -1
                 flatColorMap[idx] = colorMap.getPixel(x, z)
                 flatColorMapOriginal[idx] = flatColorMap[idx]
+                blockColumns[idx] = null
                 if (tmData) {
                     flatTileMap[idx] = tmData.getTile(x, z)
                     flatIsCollisionWall[idx] = tmData.isWall(x, z)
