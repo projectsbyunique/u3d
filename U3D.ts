@@ -36,7 +36,7 @@ namespace U3D {
     let turnSpeed = 0.8     // degrees per d-pad tick
 
     // ── Spatial Audio (UTM integration) ─────────────────────────────────────
-    interface SongData {
+    export interface SongData {
         stepMs: number
         sfxWave: WaveShape[]
         sfxStartFreq: number[]
