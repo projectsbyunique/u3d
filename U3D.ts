@@ -956,6 +956,54 @@ namespace U3D {
      * Start the engine. Call AFTER setMaps().
      * Sets up the render loop, controls, and frame pacing.
      */
+    function update_spatial_audio() {
+        if (!soundSources.length) return
+        const now = game.runtime()
+        const camX = cameraX
+        const camZ = cameraZ
+        for (let i = 0; i < soundSources.length; i++) {
+            const src = soundSources[i]
+            if (!src.active) continue
+            if (now < src.stepTimer) continue
+            const dx = src.x - camX
+            const dz = src.z - camZ
+            const dist = Math.sqrt(dx * dx + dz * dz)
+            if (dist > src.maxDist) {
+                src.stepTimer = now + src.songData.stepMs
+                continue
+            }
+            const volMult = 1 - dist / src.maxDist
+            const data = src.songData.data
+            if (src.dataIndex >= data.length) {
+                if (src.loop) src.dataIndex = 0
+                else { src.active = false; continue }
+            }
+            const count = data[src.dataIndex++]
+            for (let j = 0; j < count; j++) {
+                const sfxId = data[src.dataIndex++]
+                const sd = src.songData
+                const sfxCount = sd.sfxWave.length
+                if (sfxId < 0 || sfxId >= sfxCount) continue
+                const sv = Math.round(sd.sfxStartVol[sfxId] * volMult)
+                const ev = Math.round(sd.sfxEndVol[sfxId] * volMult)
+                if (sv <= 0 && ev <= 0) continue
+                music.play(
+                    music.createSoundEffect(
+                        sd.sfxWave[sfxId],
+                        sd.sfxStartFreq[sfxId],
+                        sd.sfxEndFreq[sfxId],
+                        sv, ev,
+                        sd.sfxDuration[sfxId],
+                        sd.sfxEffect[sfxId],
+                        sd.sfxCurve[sfxId]
+                    ),
+                    music.PlaybackMode.InBackground
+                )
+            }
+            src.stepTimer = now + src.songData.stepMs
+        }
+    }
+
     //% blockId=u3d_start block="U3D start engine"
     //% group="Setup" weight=80
     export function start() {
